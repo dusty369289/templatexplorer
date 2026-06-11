@@ -1,158 +1,154 @@
 # templatexplorer
 
-Build a nested directory tree from a declarative `.temx` template.
+> Build a nested directory tree from a single YAML template. Like
+> `cookiecutter`, but tiny, declarative, and YAML-only.
 
-Think `cookiecutter` distilled to a single YAML file you can write by hand — useful
-for project scaffolds, repetitive directory layouts (Advent of Code days, weekly
-log folders, per-environment configs), or any time you'd otherwise `cp -r` and
-hand-edit.
+You write a `.temx` file describing the tree, the variables, and any
+repetition. `templatexplorer` materialises it.
+
+```bash
+python templatexplorer.py examples/aoc.temx --var year=2022
+```
+
+…produces:
+
+```
+aoc-2022/
+├── Day 1/
+│   ├── input.txt
+│   ├── input_test.txt
+│   └── main.py
+├── Day 2/
+│   ├── input.txt
+│   ├── input_test.txt
+│   └── main.py
+... (25 days total)
+└── Day 25/
+    ├── input.txt
+    ├── input_test.txt
+    └── main.py
+```
+
+…where each `main.py` is a fresh solver stub with the day number baked into
+its input-file paths.
+
+---
+
+## When this is useful
+
+- **Advent of Code** — scaffold all 25 days in one command.
+- **Weekly / per-environment / per-region layouts** — anything that's "the
+  same N times with one thing changing".
+- **Project starters** — a single readable YAML beats a Python `cookiecutter`
+  template for small scaffolds.
+- **Replacing `cp -r && rename`** — when you'd otherwise duplicate a folder
+  and hand-edit the names and contents inside.
+
+If you want hooks, Jinja conditionals, post-build scripts — pick a heavier
+tool. This is intentionally small.
 
 ## Install
+
+Just clone and run. The only runtime dependency is `PyYAML`.
 
 ```bash
 git clone https://github.com/<you>/templatexplorer.git
 cd templatexplorer
-pip install -e .          # or just: pip install pyyaml
+pip install pyyaml      # or: pip install -e .
+python templatexplorer.py --help
 ```
 
-## Use
+Python 3.10+.
 
-```bash
-python templatexplorer.py path/to/template.temx [--out DIR] [--var k=v ...] [--force] [--dry-run]
+## CLI
+
+```
+python templatexplorer.py TEMPLATE [--out DIR] [--var NAME=VALUE]... [--force] [--dry-run]
 ```
 
-- **No `--out`** → builds into the current working directory.
-- **`--var name=value`** → override a declared variable, or define a new one. Repeatable.
-- **`--force`** → overwrite existing files at planned paths (existing directories are reused either way).
-- **`--dry-run`** → validate + print the planned tree without touching disk.
-
-Exit codes: `0` on success, `1` on any template/build error, `2` on argparse misuse.
-
-## `.temx` format
-
-YAML with two top-level keys:
-
-```yaml
-variables:        # optional
-  <name>: <spec>
-  ...
-
-root:             # required: a list of nodes
-  - <node>
-  ...
-```
-
-### Variables
-
-Three forms, one per variable:
-
-| Form | YAML | Use case |
+| Flag | Default | Effect |
 |---|---|---|
-| Static value | `year: 2026` *(shorthand)* or `year: { value: 2026 }` | Constant used in names/contents. |
-| Integer range | `day: { range: [1, 25] }` | Both ends **inclusive**. |
-| List | `env: { list: [dev, staging, prod] }` | Replicate over arbitrary values. |
+| `TEMPLATE` | — | Required. Path to a `.temx` file. |
+| `--out DIR` | current directory | Where the tree is built. |
+| `--var NAME=VALUE` | none | Override a declared variable, or define a new one. Repeatable. |
+| `--force` | off | Overwrite existing files at planned paths. |
+| `--dry-run` | off | Validate + print the plan without writing anything. |
 
-Variable names must be valid Python identifiers.
+Exit codes: `0` success, `1` template or build error (`stderr` has the
+message), `2` argparse misuse.
 
-### Nodes
-
-Every node is either a directory or a file:
-
-```yaml
-- dir: <name>          # directory node
-  repeat: <varname>    # optional: replicate this dir once per value of <varname>
-  children:            # optional: nested nodes
-    - ...
-
-- file: <name>         # file node
-  repeat: <varname>    # optional
-  content: |           # optional: file body (defaults to empty)
-    ...
-```
-
-A node may declare exactly one of `dir`/`file`. A `dir` may have `children`; a
-`file` may have `content`. Both may have `repeat`.
-
-### Variable substitution
-
-Names and file contents use Python `str.format()` syntax. Format specifiers work
-the way you'd expect:
-
-```yaml
-- file: "day{day:02d}.py"   # day01.py, day02.py, …
-  repeat: day
-  content: |
-    DAY = {day}
-```
-
-To write a literal `{` or `}`, double it: `{{` / `}}`.
-
-### Scoping
-
-Static variables are always in scope. Loop variables (introduced by `repeat:`)
-are in scope only inside that node and its descendants. After the loop, the
-variable is no longer defined — a sibling node trying to reference it will error.
-
-Loops nest naturally: an inner `repeat` sees its outer loop's variable.
+## A 30-second `.temx` walkthrough
 
 ```yaml
 variables:
-  week: { range: [1, 4] }
-  day:  { range: [1, 7] }
+  year: { value: 2026 }       # static — substituted anywhere {year} appears
+  day:  { range: [1, 25] }    # loop variable — inclusive both ends
 
 root:
-  - dir: "week-{week}"
-    repeat: week
+  - dir: "aoc-{year}"
     children:
-      - file: "day-{day}-of-week-{week}.md"
-        repeat: day
+      - dir: "Day {day}"
+        repeat: day            # replicate this dir for each day in 1..25
+        children:
+          - file: input.txt    # empty file
+          - file: main.py
+            content: |
+              # solver for day {day} of {year}
+              ...
 ```
 
-### CLI overrides
+Two top-level keys:
+- `variables` — name → spec. Three forms: `value:` (static), `range: [a, b]`
+  (inclusive int range), `list: [...]` (any).
+- `root` — a list of nodes. Each node is either a `dir:` (may have `children:`)
+  or a `file:` (may have `content:`). Either may have `repeat: <varname>` to
+  replicate the subtree.
 
-`--var name=value` either overrides a declared variable or defines a new one.
-Overriding a `range`- or `list`-typed variable collapses its loop to that single
-value (handy for `--var day=07` to scaffold only day 7).
+Names and contents use **Python format-string syntax**: `{day}`, `{day:02d}`,
+escape literal braces with `{{` / `}}`.
 
-Integer-typed variables (range or `int` static) coerce override strings to int
-before formatting, so `{day:02d}` still works.
-
-## Example: Advent of Code scaffold
-
-```bash
-python templatexplorer.py examples/aoc.temx --var year=2026
-```
-
-Produces:
-
-```
-advent-of-code-2026/
-├── README.md
-├── solve.py
-├── days/
-│   ├── __init__.py
-│   ├── day01.py
-│   ├── …
-│   └── day25.py
-└── inputs/
-    ├── .gitkeep
-    ├── day01.txt
-    ├── day01_test.txt
-    ├── …
-    └── day25_test.txt
-```
-
-See `examples/aoc.temx` for the template.
+The **full spec** — every rule, every edge case, the grammar, the error
+catalogue, and more examples — lives in [`docs/TEMX.md`](docs/TEMX.md). Read
+it once and you'll know the format.
 
 ## Safety
 
-- Names that render to `..`, `.`, contain a path separator, or are empty are rejected.
-- Output paths are checked for containment under `--out` after resolution.
-- Without `--force`, an existing file at a planned target aborts the whole build
-  before any change is made (atomic-ish: either all-or-nothing at the planning layer).
+- Rendered names that resolve to `..`, `.`, or contain path separators are
+  rejected before any disk action.
+- Output targets are checked to stay inside `--out` after `Path.resolve()`,
+  defending against symlink escapes.
+- Without `--force`, a single existing file at a planned target aborts the
+  entire build — you don't get a half-written tree.
 
-## Tests
+## Testing
 
 ```bash
 python -m pytest -q
 ```
+
+Currently 67 tests covering the parser, expander, builder, CLI, and an
+end-to-end build of the bundled AoC example.
+
+## Layout
+
+```
+templatexplorer.py            # entry-point shim
+templatexplorer/              # package
+  parser.py                   # YAML → AST (Variable, Node, Template)
+  expander.py                 # AST → flat list of PlanItem(kind, path, content)
+  builder.py                  # apply PlanItem list to filesystem
+  cli.py                      # argparse front door
+  errors.py                   # TemxError
+docs/TEMX.md                  # full format specification
+examples/aoc.temx             # the 2022-style AoC scaffold
+tests/                        # pytest suite
+```
+
+## Status
+
+Pre-1.0. Format is stable enough to use; if it changes incompatibly it'll be
+called out in the changelog.
+
+## License
+
+MIT.
