@@ -1,0 +1,102 @@
+# Scaffold a minimal Python package with src-layout and pytest.
+#
+# Run: python templatexplorer.py examples/python-package.temx --var pkg=mypackage
+#
+# Override `pkg` to change the package name. Author/year are also overridable.
+
+variables:
+  pkg:
+    value: mypackage
+  author:
+    value: "Your Name"
+  year:
+    value: 2026
+
+root:
+  - dir: "{pkg}"
+    children:
+      - file: pyproject.toml
+        content: |
+          [build-system]
+          requires = ["setuptools>=61"]
+          build-backend = "setuptools.build_meta"
+
+          [project]
+          name = "{pkg}"
+          version = "0.1.0"
+          description = "TODO: one-line description"
+          readme = "README.md"
+          requires-python = ">=3.10"
+          authors = [{{ name = "{author}" }}]
+          dependencies = []
+
+          [tool.setuptools.packages.find]
+          where = ["src"]
+
+          [tool.pytest.ini_options]
+          testpaths = ["tests"]
+
+      - file: README.md
+        content: |
+          # {pkg}
+
+          TODO: one-line description.
+
+          ## Install
+
+          ```bash
+          pip install -e .
+          ```
+
+          ## Test
+
+          ```bash
+          python -m pytest
+          ```
+
+      - file: LICENSE
+        content: |
+          MIT License
+
+          Copyright (c) {year} {author}
+
+          Permission is hereby granted, free of charge, to any person obtaining a copy
+          of this software and associated documentation files (the "Software"), to deal
+          in the Software without restriction.
+
+      - file: .gitignore
+        content: |
+          __pycache__/
+          *.pyc
+          .venv/
+          .pytest_cache/
+          *.egg-info/
+          dist/
+          build/
+
+      - dir: src
+        children:
+          - dir: "{pkg}"
+            children:
+              - file: __init__.py
+                content: |
+                  __version__ = "0.1.0"
+
+              - file: core.py
+                content: |
+                  """Core module for {pkg}."""
+
+
+                  def hello(name: str) -> str:
+                      return f"Hello, {{name}}!"
+
+      - dir: tests
+        children:
+          - file: __init__.py
+          - file: test_core.py
+            content: |
+              from {pkg}.core import hello
+
+
+              def test_hello():
+                  assert hello("world") == "Hello, world!"

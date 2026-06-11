@@ -1,0 +1,51 @@
+# Scaffold a set of React components, each with its own folder containing
+# the component, a colocated test, a styles module, and a barrel index.
+#
+# Run: python templatexplorer.py examples/react-components.temx
+#
+# Edit the `components` list to change which components are created.
+
+variables:
+  components:
+    list: [Button, Card, Modal, Toast]
+
+root:
+  - dir: src
+    children:
+      - dir: components
+        children:
+          - dir: "{components}"
+            repeat: components
+            children:
+              - file: "{components}.tsx"
+                content: |
+                  import styles from "./{components}.module.css";
+
+                  export interface {components}Props {{
+                    children?: React.ReactNode;
+                  }}
+
+                  export function {components}({{ children }}: {components}Props) {{
+                    return <div className={{styles.root}}>{{children}}</div>;
+                  }}
+
+              - file: "{components}.module.css"
+                content: |
+                  .root {{
+                    /* TODO: styles for {components} */
+                  }}
+
+              - file: "{components}.test.tsx"
+                content: |
+                  import {{ render, screen }} from "@testing-library/react";
+                  import {{ {components} }} from "./{components}";
+
+                  test("renders children", () => {{
+                    render(<{components}>hello</{components}>);
+                    expect(screen.getByText("hello")).toBeInTheDocument();
+                  }});
+
+              - file: index.ts
+                content: |
+                  export {{ {components} }} from "./{components}";
+                  export type {{ {components}Props }} from "./{components}";

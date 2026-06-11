@@ -1,0 +1,48 @@
+# Generate a config matrix: every environment × every region.
+# Useful for terraform/ansible/kustomize bases where each leaf needs its own
+# values file pre-stamped with the env and region names.
+#
+# Run: python templatexplorer.py examples/multi-env-config.temx
+#
+# 3 envs × 3 regions = 9 config.yaml files, each labelled correctly.
+
+variables:
+  env:
+    list: [dev, staging, prod]
+  region:
+    list: [eu-west, us-east, ap-southeast]
+
+root:
+  - dir: deploy
+    children:
+      - file: README.md
+        content: |
+          # Deployment configs
+
+          Per env × region leaf configs. Edit each `config.yaml` to taste.
+
+      - dir: "{env}"
+        repeat: env
+        children:
+          - file: env.yaml
+            content: |
+              # Defaults for the {env} environment.
+              environment: {env}
+              log_level: info
+
+          - dir: "{region}"
+            repeat: region
+            children:
+              - file: config.yaml
+                content: |
+                  environment: {env}
+                  region: {region}
+                  # Override per-leaf values here.
+
+              - file: secrets.example.yaml
+                content: |
+                  # Copy to secrets.yaml and fill in. Do NOT commit secrets.yaml.
+                  environment: {env}
+                  region: {region}
+                  api_key: ""
+                  db_password: ""

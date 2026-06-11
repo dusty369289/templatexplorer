@@ -1,3 +1,10 @@
+# Advent of Code: one folder per day (1..25), each with input.txt,
+# input_test.txt, and a main.py stub already pointed at its own files.
+#
+# Run: python templatexplorer.py examples/aoc-scaffold.temx --var year=2026
+#
+# To scaffold only one day: --var day=7
+
 variables:
   year:
     value: 2026

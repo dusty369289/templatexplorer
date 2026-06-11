@@ -1,0 +1,37 @@
+# Build a year's worth of weekly journal entries — 52 markdown files in one
+# folder, each pre-stamped with the week number.
+#
+# Run: python templatexplorer.py examples/weekly-journal.temx --var year=2026
+#
+# Files sort cleanly because we zero-pad the week number (week-01.md, week-02.md).
+
+variables:
+  year:
+    value: 2026
+  week:
+    range: [1, 52]
+
+root:
+  - dir: "journal-{year}"
+    children:
+      - file: README.md
+        content: |
+          # Journal {year}
+
+          One markdown file per ISO week of the year.
+
+      - file: "week-{week:02d}.md"
+        repeat: week
+        content: |
+          # Week {week} — {year}
+
+          ## Highlights
+
+
+          ## Decisions
+
+
+          ## What I learned
+
+
+          ## Next week

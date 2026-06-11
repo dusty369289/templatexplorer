@@ -1,0 +1,65 @@
+# Scaffold a monorepo with multiple microservices sharing the same skeleton.
+# Each service gets its own folder with Dockerfile, src/, and tests/.
+#
+# Run: python templatexplorer.py examples/monorepo-services.temx
+#
+# To use your own service list, edit the `services` list below or override:
+#   python templatexplorer.py examples/monorepo-services.temx --var services=...
+# (CLI override of list vars collapses to a single value — for a different
+# list, edit the file. CLI overrides are for one-off swaps.)
+
+variables:
+  services:
+    list: [auth, billing, notifications, search]
+
+root:
+  - dir: services
+    children:
+      - dir: "{services}"
+        repeat: services
+        children:
+          - file: Dockerfile
+            content: |
+              FROM python:3.12-slim
+              WORKDIR /app
+              COPY pyproject.toml ./
+              RUN pip install --no-cache-dir .
+              COPY src ./src
+              CMD ["python", "-m", "{services}"]
+
+          - file: pyproject.toml
+            content: |
+              [project]
+              name = "{services}"
+              version = "0.1.0"
+              dependencies = []
+
+              [tool.setuptools.packages.find]
+              where = ["src"]
+
+          - file: README.md
+            content: |
+              # {services}
+
+              The `{services}` service.
+
+          - dir: src
+            children:
+              - dir: "{services}"
+                children:
+                  - file: __init__.py
+                  - file: __main__.py
+                    content: |
+                      def main():
+                          print("starting {services}")
+
+
+                      if __name__ == "__main__":
+                          main()
+
+          - dir: tests
+            children:
+              - file: "test_{services}.py"
+                content: |
+                  def test_placeholder():
+                      assert True

@@ -71,7 +71,13 @@ def build(
 
 
 def _safe_join(root: Path, rel: PurePosixPath) -> Path:
-    """Join `rel` onto `root`, guaranteeing the result stays inside `root`."""
+    """Join `rel` onto `root` and return the joined (NOT resolved) path.
+
+    Containment is verified via a transient resolve — that catches any symlink in
+    the existing path chain that points outside `root`. We deliberately return
+    the un-resolved path so that O_NOFOLLOW at the eventual `os.open` can detect
+    a symlink at the final component, even one pointing INSIDE the root.
+    """
     if rel.is_absolute():
         raise TemxError(f"Plan item path is absolute, which is not allowed: {rel}")
     target = root.joinpath(*rel.parts)
@@ -80,7 +86,7 @@ def _safe_join(root: Path, rel: PurePosixPath) -> Path:
     except (OSError, RuntimeError) as exc:
         raise TemxError(f"Could not resolve target path {target}: {exc}") from exc
     _verify_still_contained(root, resolved)
-    return resolved
+    return target
 
 
 def _verify_still_contained(root: Path, target: Path) -> None:

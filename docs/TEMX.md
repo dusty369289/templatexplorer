@@ -282,69 +282,81 @@ variable-name   := python-identifier — { "true", "false", "null", "yes", "no" 
 
 ## 11. Worked examples
 
-### 11.1 Advent of Code (2022 style)
+The `examples/` directory ships eight ready-to-use templates. They double as
+a feature tour — each one was picked to demonstrate a different combination
+of variable types, loops, and substitution patterns. Browse them in this
+order if you're learning the format.
 
-Per-day folders with input files and a stub solver. Each `main.py` references
-its own day folder name in path literals — pure substitution does the right
-thing.
+| Template | Demonstrates |
+|---|---|
+| `python-package.temx` | Static variables only; multiline contents; no loops |
+| `weekly-journal.temx` | Single `range:` loop with zero-padding format spec |
+| `blog-posts.temx` | `range:` loop in a folder name with format spec |
+| `react-components.temx` | `list:` loop over strings |
+| `monorepo-services.temx` | `list:` loop with multiple files per item |
+| `multi-env-config.temx` | Two nested `list:` loops (matrix expansion) |
+| `course-modules.temx` | Two nested `range:` loops; inner loop references outer var |
+| `aoc-scaffold.temx` | Loop + file-content interpolation referencing loop var |
+
+Below are three illustrative snippets. The shipped files are richer; consult
+them for full structure.
+
+### 11.1 Static variables only — Python package skeleton
+
+A small scaffold with no loops. Demonstrates static variables, content
+interpolation, and nested directories.
+
+```yaml
+variables:
+  pkg: { value: mypackage }
+
+root:
+  - dir: "{pkg}"
+    children:
+      - file: pyproject.toml
+        content: |
+          [project]
+          name = "{pkg}"
+          version = "0.1.0"
+      - dir: src
+        children:
+          - dir: "{pkg}"
+            children:
+              - file: __init__.py
+                content: '__version__ = "0.1.0"'
+```
+
+Build: `python templatexplorer.py pkg.temx --var pkg=widget`.
+
+### 11.2 Single integer loop — weekly journal
+
+A `range:` loop with a zero-padding format spec so the files sort numerically.
 
 ```yaml
 variables:
   year: { value: 2026 }
-  day:  { range: [1, 25] }
+  week: { range: [1, 52] }
 
 root:
-  - dir: "aoc-{year}"
+  - dir: "journal-{year}"
     children:
-      - dir: "Day {day}"
-        repeat: day
-        children:
-          - file: input.txt
-          - file: input_test.txt
-          - file: main.py
-            content: |
-              def load_input(path):
-                  return open(path).read().strip().split("\n")
-
-              def part1(data): ...
-              def part2(data): ...
-
-              if __name__ == "__main__":
-                  testdata = load_input("Day {day}/input_test.txt")
-                  data = load_input("Day {day}/input.txt")
-                  print("Part 1:", part1(data))
-                  print("Part 2:", part2(data))
-```
-
-Build: `python templatexplorer.py aoc.temx --var year=2022`.
-
-### 11.2 Weekly log
-
-```yaml
-variables:
-  weeks: { range: [1, 52] }
-
-root:
-  - dir: logs
-    children:
-      - file: "week-{weeks:02d}.md"
-        repeat: weeks
+      - file: "week-{week:02d}.md"
+        repeat: week
         content: |
-          # Week {weeks} log
+          # Week {week} — {year}
 
-          ## Mon
-          ## Tue
-          ## Wed
-          ## Thu
-          ## Fri
+          ## Highlights
 ```
 
-### 11.3 Per-environment config scaffold
+### 11.3 Nested list loops — config matrix
+
+Two `list:` loops nested. The inner loop sees both its own variable and the
+outer one.
 
 ```yaml
 variables:
-  env: { list: [dev, staging, prod] }
-  region: { list: [eu, us, ap] }
+  env:    { list: [dev, staging, prod] }
+  region: { list: [eu-west, us-east, ap-southeast] }
 
 root:
   - dir: deploy
@@ -357,11 +369,16 @@ root:
             children:
               - file: config.yaml
                 content: |
-                  env: {env}
+                  environment: {env}
                   region: {region}
 ```
 
 Produces 3 × 3 = 9 leaf `config.yaml` files, each with the correct labels.
+
+> See `examples/aoc-scaffold.temx` for a complete worked example combining
+> a loop in directory names with file contents that reference the loop
+> variable in path strings — a common pattern when each generated file
+> needs to remember its own coordinates.
 
 ## 12. Error catalogue
 

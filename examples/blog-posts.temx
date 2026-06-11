@@ -1,0 +1,31 @@
+# Scaffold a year of dated blog post stubs — one folder per month, one
+# placeholder post per month with frontmatter.
+#
+# Run: python templatexplorer.py examples/blog-posts.temx --var year=2026
+#
+# Months are zero-padded so the folders sort chronologically.
+
+variables:
+  year:
+    value: 2026
+  month:
+    range: [1, 12]
+
+root:
+  - dir: "posts-{year}"
+    children:
+      - dir: "{month:02d}"
+        repeat: month
+        children:
+          - file: "draft.md"
+            content: |
+              ---
+              title: TODO
+              date: {year}-{month:02d}-01
+              draft: true
+              tags: []
+              ---
+
+              # TODO
+
+              Write the post here.

@@ -293,3 +293,183 @@ def test_l2_unicode_in_paths_ok(tmp_path):
     items = expand(parse_temx("variables:\n  who: 'élève'\nroot:\n  - file: '{who}.txt'\n"))
     build(items, tmp_path)
     assert (tmp_path / "élève.txt").is_file()
+
+
+def test_l2_deep_nesting_works(tmp_path):
+    # Defensive cap against accidental recursion-depth regressions.
+    # 30 levels — comfortably under CPython's default of 1000.
+    src = "root:\n"
+    indent = "  "
+    for i in range(30):
+        src += f"{indent}- dir: d{i}\n{indent}  children:\n"
+        indent += "    "
+    src += f"{indent}- file: deep.txt\n{indent}  content: hi\n"
+    plan = expand(parse_temx(src))
+    build(plan, tmp_path)
+    deep = tmp_path
+    for i in range(30):
+        deep = deep / f"d{i}"
+    assert (deep / "deep.txt").read_text() == "hi"
+
+
+def test_l2_yaml_anchors_and_aliases_work():
+    # PyYAML supports anchors out of the box. They're a natural way to share
+    # content blocks between similar nodes — make sure we don't accidentally
+    # break them with future tightening.
+    src = """
+variables:
+  i:
+    range: [1, 2]
+root:
+  - file: "a{i}.txt"
+    repeat: i
+    content: &body |
+      shared body
+  - file: "b{i}.txt"
+    repeat: i
+    content: *body
+""".strip()
+    items = expand(parse_temx(src))
+    assert all(it.content == "shared body\n" for it in items)
+
+
+def test_l2_value_typed_var_used_as_repeat_iterates_once(tmp_path):
+    # `repeat:` on a static value var produces a single iteration with that value.
+    # Unusual but well-defined. Lock the behaviour.
+    items = expand(
+        parse_temx(
+            "variables:\n  only: 42\nroot:\n  - dir: 'd{only}'\n    repeat: only\n"
+        )
+    )
+    assert len(items) == 1
+    assert str(items[0].path) == "d42"
+
+
+def test_l2_multiline_content_with_substitutions(tmp_path):
+    items = expand(
+        parse_temx(
+            """
+variables:
+  name: alice
+root:
+  - file: "{name}.md"
+    content: |
+      # Hello {name}
+
+      Line two for {name}.
+""".strip()
+        )
+    )
+    body = items[0].content
+    assert "Hello alice" in body
+    assert "Line two for alice" in body
+
+
+def test_l2_var_with_equals_in_value():
+    # --var url=http://x?a=b — the split is on the FIRST `=`.
+    from templatexplorer.cli import _parse_var_assignment
+
+    assert _parse_var_assignment("url=http://x?a=b") == ("url", "http://x?a=b")
+
+
+def test_l2_cli_override_wins_over_static_declaration():
+    items = expand(
+        parse_temx("variables:\n  who: alice\nroot:\n  - file: '{who}.txt'\n"),
+        overrides={"who": "bob"},
+    )
+    assert str(items[0].path) == "bob.txt"
+
+
+def test_l2_static_var_visible_inside_loop_scope():
+    items = expand(
+        parse_temx(
+            """
+variables:
+  proj: myapp
+  i:
+    range: [1, 2]
+root:
+  - dir: "{proj}"
+    children:
+      - file: "step{i}.txt"
+        repeat: i
+        content: "in {proj} step {i}"
+""".strip()
+        )
+    )
+    files = [it for it in items if it.kind == "file"]
+    assert files[0].content == "in myapp step 1"
+    assert files[1].content == "in myapp step 2"
+
+
+# ---------- H3 (documented, not fixed): collision detect is case-sensitive ----------
+
+
+def test_h3_collision_detect_is_case_sensitive_by_design():
+    # Two plan items differing only in case do NOT collide internally.
+    # On Linux this is fine (FS is case-sensitive); on macOS/Windows the second
+    # write would clobber the first. Documented in docs/TEMX.md §8.
+    plan = [
+        PlanItem(kind="file", path=PurePosixPath("X.txt"), content="a"),
+        PlanItem(kind="file", path=PurePosixPath("x.txt"), content="b"),
+    ]
+    # Builder does NOT raise on internal duplicates here.
+    # (We can't safely call build() in tests without OS-specific behaviour, so
+    # we just assert the duplicate check passes.)
+    from templatexplorer.builder import _check_internal_duplicates
+
+    _check_internal_duplicates(plan)
+
+
+# ---------- Extra C1 hardening tests ----------
+
+
+@pytest.mark.skipif(os.name != "posix", reason="symlink semantics POSIX-only")
+def test_c1_symlink_to_inside_root_at_file_path_caught_by_o_nofollow(tmp_path):
+    """A symlink at the planned file path pointing INSIDE the root — containment
+    passes, but O_NOFOLLOW at write time refuses to follow it. Without the
+    O_NOFOLLOW fix, the file content would be silently written through the
+    symlink to its target."""
+    out = tmp_path / "out"
+    out.mkdir()
+    real = out / "real.txt"
+    real.write_text("original")
+
+    # symlink x.txt → real.txt (both inside out)
+    (out / "x.txt").symlink_to(real)
+
+    template = parse_temx("root:\n  - file: x.txt\n    content: new\n")
+    plan = expand(template)
+    # Without --force: collision detect (lstat-based) catches the symlink.
+    with pytest.raises(TemxError, match="already exist"):
+        build(plan, out)
+    assert real.read_text() == "original"
+
+    # With --force: O_NOFOLLOW catches it instead.
+    with pytest.raises(TemxError):
+        build(plan, out, force=True)
+    assert real.read_text() == "original"
+
+
+# ---------- Extra M1 hardening tests ----------
+
+
+def test_m1_attribute_access_via_loop_var_rejected():
+    # Loop variables are also subject to the SafeFormatter, not just static ones.
+    with pytest.raises(TemxError, match="attribute or index access"):
+        expand(
+            parse_temx(
+                "variables:\n  i:\n    range: [1, 2]\n"
+                "root:\n  - file: '{i.real}.txt'\n    repeat: i\n"
+            )
+        )
+
+
+def test_m1_override_value_does_not_get_attribute_access():
+    # CLI override values reach the formatter; ensure they can't sneak attr access
+    # through a template field referencing them.
+    with pytest.raises(TemxError, match="attribute or index access"):
+        expand(
+            parse_temx("root:\n  - file: '{ext.upper}.txt'\n"),
+            overrides={"ext": "txt"},
+        )

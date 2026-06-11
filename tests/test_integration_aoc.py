@@ -4,7 +4,7 @@ from pathlib import Path
 
 from templatexplorer import build, expand, parse_temx
 
-EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "aoc.temx"
+EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "aoc-scaffold.temx"
 
 
 def test_aoc_example_builds_expected_tree(tmp_path):

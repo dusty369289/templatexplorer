@@ -1,0 +1,98 @@
+# Scaffold a multi-module course or curriculum: N modules, each with the same
+# sub-structure (notes, slides, exercises with starter files, and a quiz).
+#
+# Run: python templatexplorer.py examples/course-modules.temx --var course="Intro to X"
+#
+# Set the module count via --var modules=8 to override the range below.
+
+variables:
+  course:
+    value: "My Course"
+  modules:
+    range: [1, 6]
+  exercises:
+    range: [1, 3]
+
+root:
+  - dir: course
+    children:
+      - file: README.md
+        content: |
+          # {course}
+
+          A six-module course. Each module folder contains notes, slides,
+          exercises with starter code, and a quiz.
+
+      - file: syllabus.md
+        content: |
+          # {course} — syllabus
+
+          - Module 1
+          - Module 2
+          - Module 3
+          - Module 4
+          - Module 5
+          - Module 6
+
+      - dir: "module-{modules:02d}"
+        repeat: modules
+        children:
+          - file: notes.md
+            content: |
+              # Module {modules} notes
+
+              ## Concepts
+
+
+              ## Examples
+
+
+              ## Further reading
+
+          - file: slides.md
+            content: |
+              # Module {modules} — {course}
+
+              ---
+
+              ## Outline
+
+              - Topic A
+              - Topic B
+              - Topic C
+
+          - file: quiz.md
+            content: |
+              # Module {modules} quiz
+
+              1. Question 1?
+              2. Question 2?
+              3. Question 3?
+
+          - dir: exercises
+            children:
+              - file: "exercise-{exercises}.md"
+                repeat: exercises
+                content: |
+                  # Module {modules}, exercise {exercises}
+
+                  ## Goal
+
+
+                  ## Steps
+
+
+                  ## Hints
+
+              - file: "starter-{exercises}.py"
+                repeat: exercises
+                content: |
+                  """Starter file for module {modules}, exercise {exercises}."""
+
+
+                  def solve():
+                      raise NotImplementedError
+
+
+                  if __name__ == "__main__":
+                      solve()
