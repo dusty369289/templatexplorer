@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path, PurePosixPath
 
 from .errors import TemxError
 from .expander import PlanItem
+
+# O_NOFOLLOW is POSIX. On platforms without it (most notably old Windows Python),
+# fall back to 0; the symlink defence then relies on the lstat/containment recheck.
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 
 def build(
@@ -17,11 +22,15 @@ def build(
 ) -> list[Path]:
     """Apply `plan` under `out_root`. Returns the list of absolute paths written/created.
 
-    Without `force`, any existing target (file or non-empty/empty dir entry) causes a TemxError
-    before any change is made. With `force`, existing files are overwritten in place and
-    existing directories are reused (their non-template contents are left untouched).
+    Without `force`, any existing target (file, symlink, or anything not a real directory at
+    a planned dir path) causes a TemxError before any change is made. With `force`, existing
+    files are overwritten in place and existing real directories are reused (their contents
+    are left untouched).
 
     `dry_run` performs all validation without touching the filesystem.
+
+    Symlink safety: writes use O_NOFOLLOW where supported, and every target's resolved path
+    is verified to stay inside `out_root` both at plan time and immediately before write.
     """
     out_root = out_root.resolve()
     if out_root.exists() and not out_root.is_dir():
@@ -43,39 +52,76 @@ def build(
                 f"{len(clashes)} target path(s) already exist. Re-run with --force to overwrite.\n  {preview}{more}"
             )
 
-    written: list[Path] = []
     if dry_run:
         return [t for _, t in resolved]
 
     out_root.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
     for item, target in resolved:
         if item.kind == "dir":
             target.mkdir(parents=True, exist_ok=True)
+            _reject_if_symlink(target, kind="dir")
             written.append(target)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(item.content or "", encoding="utf-8")
+            _reject_if_symlink(target.parent, kind="parent directory")
+            _write_file_no_follow(target, item.content or "")
             written.append(target)
     return written
 
 
 def _safe_join(root: Path, rel: PurePosixPath) -> Path:
-    """Join `rel` onto `root`, guaranteeing the result stays inside `root`.
-
-    `rel` parts have already been screened for path separators and `..` by the expander,
-    but we double-check with a resolved containment test in case of symlink shenanigans.
-    """
+    """Join `rel` onto `root`, guaranteeing the result stays inside `root`."""
     if rel.is_absolute():
         raise TemxError(f"Plan item path is absolute, which is not allowed: {rel}")
     target = root.joinpath(*rel.parts)
-    # We resolve `strict=False` because the target need not exist yet.
     try:
         resolved = target.resolve(strict=False)
     except (OSError, RuntimeError) as exc:
         raise TemxError(f"Could not resolve target path {target}: {exc}") from exc
-    if root != resolved and root not in resolved.parents:
-        raise TemxError(f"Target path {resolved} escapes output root {root}")
+    _verify_still_contained(root, resolved)
     return resolved
+
+
+def _verify_still_contained(root: Path, target: Path) -> None:
+    if root == target:
+        return
+    if root in target.parents:
+        return
+    raise TemxError(f"Target path {target} escapes output root {root}")
+
+
+def _reject_if_symlink(path: Path, *, kind: str) -> None:
+    """Refuse to write through a symlink, even if its target is inside the output root."""
+    try:
+        st = path.lstat()
+    except OSError as exc:
+        raise TemxError(f"Could not lstat {path}: {exc}") from exc
+    import stat
+    if stat.S_ISLNK(st.st_mode):
+        raise TemxError(
+            f"{kind.capitalize()} at {path} is a symlink; refusing to write through it"
+        )
+
+
+def _write_file_no_follow(target: Path, content: str) -> None:
+    """Open the target with O_NOFOLLOW and write content.
+
+    If `target` is itself a symlink, O_NOFOLLOW causes the open to fail (ELOOP),
+    which we surface as a TemxError. This closes a TOCTOU window between the
+    collision check and the actual write.
+    """
+    data = content.encode("utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _O_NOFOLLOW
+    try:
+        fd = os.open(target, flags, 0o644)
+    except OSError as exc:
+        # ELOOP is the most informative case; surface the generic message otherwise.
+        raise TemxError(f"Could not open {target} for writing: {exc}") from exc
+    try:
+        os.write(fd, data)
+    finally:
+        os.close(fd)
 
 
 def _check_internal_duplicates(plan: list[PlanItem]) -> None:
@@ -95,16 +141,24 @@ def _check_internal_duplicates(plan: list[PlanItem]) -> None:
 
 
 def _detect_collisions(resolved: list[tuple[PlanItem, Path]]) -> list[Path]:
+    """Use lexists/lstat so a symlink at a planned target counts as a collision
+    even though the symlink may dangle or point inside the root."""
     clashes: list[Path] = []
     for item, target in resolved:
-        if not target.exists():
+        try:
+            st = target.lstat()
+        except FileNotFoundError:
             continue
+        except OSError:
+            clashes.append(target)
+            continue
+        import stat
         if item.kind == "dir":
-            # An existing dir is fine; we'd just write into it.
-            if target.is_dir():
+            # An existing real dir at a planned dir path is fine; symlink or file is a clash.
+            if stat.S_ISDIR(st.st_mode) and not stat.S_ISLNK(st.st_mode):
                 continue
             clashes.append(target)
         else:
-            # File or anything else — collision.
+            # Anything at a planned file path is a clash — including a symlink.
             clashes.append(target)
     return clashes

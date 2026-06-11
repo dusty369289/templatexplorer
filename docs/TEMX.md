@@ -72,6 +72,10 @@ explicit form.
 > can (`{flag}` renders `"True"`), but `{flag:02d}` would error. Prefer explicit
 > typing for anything you'll format with specifiers.
 
+> **`value: null` is rejected.** A null variable would silently render as the
+> literal string `"None"`, which is almost never what's intended. Use `value: ''`
+> (empty string) or drop the variable.
+
 ## 3. Nodes
 
 A node is either a **directory** or a **file**:
@@ -118,11 +122,9 @@ Supported:
 - Format specifiers: `{day:02d}`, `{pct:.2%}`, `{name:>10}`, etc.
 - Literal braces by doubling: `{{` and `}}`.
 
-Not supported (deliberately):
-- Attribute or index access (`{x.foo}`, `{x[0]}`) — disallowed in templates
-  because it leaks Python object internals; tooling MAY reject these as part of
-  hardening but the current reference implementation does not enforce it.
-  Don't rely on these forms.
+Not supported (rejected at expand time):
+- **Attribute access** (`{x.foo}`) — would leak Python object internals.
+- **Index access** (`{x[0]}`) — would let templates dig into list/dict values.
 
 If a `{name}` reference does not match any in-scope variable, expansion fails
 with an error listing the available names.
@@ -185,11 +187,15 @@ them.
 | `name` is not declared at all | Defines `name` as a string-typed static for the run. Templates can reference `{name}` and it will resolve. |
 
 Type coercion:
-- If the declared variable is `range`-typed, the override string is parsed as
-  `int` (if parsing fails it stays a string, which will then surface a clear
-  error from a format spec like `{day:02d}` if used).
+- If the declared variable is **`range`-typed**, the override string is parsed as
+  `int`.
+- If the declared variable's static `value` is an `int`, ditto.
+- If the declared variable is **`list`-typed and every list item is an `int`**, ditto.
 - Otherwise the override is treated as a string. Format specifiers that expect
   numbers will error against string overrides.
+
+If `int` parsing fails, the override stays a string, which then surfaces a
+clear error if it hits a numeric format spec.
 
 Order of resolution at render time, from most specific to least:
 1. **Loop variable** in the current scope (if shadows a static or override).
@@ -218,6 +224,19 @@ and leaves their unrelated contents intact.
 `--force` allows the build to proceed and **overwrites existing files at planned
 paths**. It does not delete files that the template doesn't declare; it does
 not recursively wipe directories.
+
+**Symlinks at planned paths.** A symlink at a planned file or directory target
+is treated as a collision even with `--force` — the build refuses to write
+through it. This applies whether the symlink points inside or outside the
+output root: in the outside case the plan-time containment check fires; in the
+inside case the lstat-based collision check or the `O_NOFOLLOW` open does. To
+proceed, remove the symlink and re-run.
+
+**Case-insensitive filesystems.** On macOS (default APFS / HFS+) and Windows,
+two template paths differing only in case (`Day1/x` vs `day1/x`) will not be
+detected as a collision by templatexplorer (which compares paths case-sensitively),
+but the OS will treat them as the same target — the second write wins silently.
+Avoid case-only differences in template paths if you target those platforms.
 
 `--dry-run` runs the entire pipeline (parse, expand, plan, collision check) but
 performs no filesystem writes. Combine with `--force` to see what would be
@@ -249,12 +268,16 @@ variable-spec   := scalar                          # shorthand value
 node-list       := [ node* ]
 node            := dir-node | file-node
 dir-node        := mapping { "dir"      : non-empty-string,
-                             "repeat"   : name ?,
+                             "repeat"   : variable-name ?,
                              "children" : node-list ? }
 file-node       := mapping { "file"     : non-empty-string,
-                             "repeat"   : name ?,
+                             "repeat"   : variable-name ?,
                              "content"  : string ? }
-name            := python-identifier — { "true", "false", "null", "yes", "no" }
+variable-name   := python-identifier — { "true", "false", "null", "yes", "no" }
+
+# Note: the reserved-word filter applies to VARIABLE names only. File/dir
+# names in `dir:` / `file:` strings are arbitrary non-empty strings that
+# survive the path-safety checks in §7.
 ```
 
 ## 11. Worked examples
@@ -354,6 +377,10 @@ Produces 3 × 3 = 9 leaf `config.yaml` files, each with the correct labels.
 | `undefined variable '...'` | A `{name}` in a name/content has no matching variable in scope. | Declare it, override with `--var`, or move the reference into the loop's scope. |
 | `rendered to '...': contains a path separator` | A substitution produced `/` or `\` in a name segment. | Sanitise the input or split into nested dirs. |
 | `target path(s) already exist` | Without `--force`, a planned file collides with an existing one. | Re-run with `--force` to overwrite, or remove the existing file. |
+| `attribute or index access is not allowed in templates` | A format string contains `{x.foo}` or `{x[0]}`. | Resolve the value before passing it in (rare). |
+| `cannot have value: null` / `cannot be null` | A variable spec was `value: null` or shorthand `null`. | Use `value: ''` or remove the variable. |
+| `is a symlink; refusing to write through it` | A planned target is a symlink. | Remove the symlink and re-run. |
+| `rendered to whitespace-only string` | A substitution produced a name like `"   "`. | Provide a non-blank value. |
 
 ## 13. Cookbook
 

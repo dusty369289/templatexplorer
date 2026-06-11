@@ -126,8 +126,9 @@ it once and you'll know the format.
 python -m pytest -q
 ```
 
-Currently 67 tests covering the parser, expander, builder, CLI, and an
-end-to-end build of the bundled AoC example.
+Currently 92 tests covering the parser, expander, builder, CLI, and an
+end-to-end build of the bundled AoC example. Includes a dedicated suite of
+regressions for findings from the senior code review.
 
 ## Layout
 

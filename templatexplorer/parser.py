@@ -105,6 +105,11 @@ def _parse_variables(raw: Any, where: str) -> dict[str, Variable]:
 def _parse_variable_spec(name: str, spec: Any, where: str) -> Variable:
     # Shorthand: plain scalar means a static value.
     if not isinstance(spec, dict):
+        if spec is None:
+            raise TemxError(
+                f"{where}: variable {name!r} cannot be null. "
+                f"Use an empty string ('') or omit the variable."
+            )
         return Variable(name=name, value=spec)
 
     keys = set(spec)
@@ -120,7 +125,13 @@ def _parse_variable_spec(name: str, spec: Any, where: str) -> Variable:
     form = forms.pop()
 
     if form == "value":
-        return Variable(name=name, value=spec["value"])
+        v = spec["value"]
+        if v is None:
+            raise TemxError(
+                f"{where}: variable {name!r} cannot have value: null. "
+                f"Use an empty string ('') or omit the variable."
+            )
+        return Variable(name=name, value=v)
     if form == "range":
         r = spec["range"]
         if not (isinstance(r, list) and len(r) == 2 and all(isinstance(x, int) and not isinstance(x, bool) for x in r)):
@@ -170,9 +181,11 @@ def _parse_node(raw: Any, where: str, path: str, defined_vars: set[str]) -> Node
 
     children: tuple[Node, ...] = ()
     if kind == "dir":
-        ch_raw = raw.get("children") or []
+        ch_raw = raw.get("children")
+        if ch_raw is None:
+            ch_raw = []
         if not isinstance(ch_raw, list):
-            raise TemxError(f"{where}:{path}: 'children' must be a list")
+            raise TemxError(f"{where}:{path}: 'children' must be a list, got {type(ch_raw).__name__}")
         children = tuple(
             _parse_node(item, where, path=f"{path}/{name}[{i}]", defined_vars=defined_vars)
             for i, item in enumerate(ch_raw)

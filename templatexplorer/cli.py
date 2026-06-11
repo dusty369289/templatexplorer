@@ -17,6 +17,7 @@ def _parse_var_assignment(raw: str) -> tuple[str, str]:
         raise argparse.ArgumentTypeError(f"--var expects name=value, got {raw!r}")
     name, value = raw.split("=", 1)
     name = name.strip()
+    value = value.strip()
     if not name.isidentifier():
         raise argparse.ArgumentTypeError(f"--var name {name!r} is not a valid identifier")
     return name, value
