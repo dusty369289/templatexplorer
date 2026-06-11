@@ -5,32 +5,19 @@ variables:
     range: [1, 25]
 
 root:
-  - dir: "advent-of-code-{year}"
+  - dir: "aoc-{year}"
     children:
-      - file: README.md
-        content: |
-          # Advent of Code {year}
-
-          Solutions per day live in `days/`; per-day inputs and test fixtures live in `inputs/`.
-
-      - file: solve.py
-        content: |
-          """Entry point: python solve.py <day>"""
-
-      - dir: days
+      - dir: "Day {day}"
+        repeat: day
         children:
-          - file: __init__.py
-            content: ""
-          - file: "day{day:02d}.py"
-            repeat: day
+          - file: input.txt
+          - file: input_test.txt
+          - file: main.py
             content: |
-              """Day {day}."""
-
-              from pathlib import Path
-
-              DAY = {day}
-              INPUT_DIR = Path(__file__).parent.parent / "inputs"
-              INPUT_TXT = INPUT_DIR / f"day{{DAY:02d}}.txt"
+              def load_input(file_path) -> list:
+                  with open(file_path, "r") as file:
+                      data = file.read().strip().split("\n")
+                  return data
 
 
               def part1(data):
@@ -40,11 +27,11 @@ root:
               def part2(data):
                   ...
 
-      - dir: inputs
-        children:
-          - file: .gitkeep
-            content: ""
-          - file: "day{day:02d}.txt"
-            repeat: day
-          - file: "day{day:02d}_test.txt"
-            repeat: day
+
+              if __name__ == "__main__":
+                  testdata = load_input("Day {day}/input_test.txt")
+                  # assert part1(testdata) == ...
+                  # assert part2(testdata) == ...
+                  data = load_input("Day {day}/input.txt")
+                  print("Part 1:", part1(data))
+                  print("Part 2:", part2(data))

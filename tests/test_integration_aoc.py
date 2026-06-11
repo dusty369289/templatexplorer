@@ -1,4 +1,4 @@
-"""Golden integration test: build the AoC scaffold end-to-end."""
+"""Golden integration test: build the AoC 2022-style scaffold end-to-end."""
 
 from pathlib import Path
 
@@ -9,37 +9,40 @@ EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "aoc.temx"
 
 def test_aoc_example_builds_expected_tree(tmp_path):
     template = parse_temx(EXAMPLE)
-    plan = expand(template, overrides={"year": "2019"})
+    plan = expand(template, overrides={"year": "2022"})
     build(plan, tmp_path)
 
-    root = tmp_path / "advent-of-code-2019"
+    root = tmp_path / "aoc-2022"
     assert root.is_dir()
-    assert (root / "README.md").read_text().splitlines()[0] == "# Advent of Code 2019"
-    assert (root / "solve.py").is_file()
-    assert (root / "days" / "__init__.py").is_file()
-    assert (root / "inputs" / ".gitkeep").is_file()
 
-    # 25 day source files
-    sources = sorted((root / "days").glob("day*.py"))
-    assert len(sources) == 25
-    assert sources[0].name == "day01.py"
-    assert sources[-1].name == "day25.py"
-    assert "DAY = 1" in sources[0].read_text()
-    assert "DAY = 25" in sources[-1].read_text()
+    day_dirs = sorted(p for p in root.iterdir() if p.is_dir())
+    assert len(day_dirs) == 25
+    # Lexicographic sort puts "Day 1" before "Day 10" — verify both ends exist.
+    assert (root / "Day 1").is_dir()
+    assert (root / "Day 25").is_dir()
+    # No zero-padding: "Day 01" must NOT exist.
+    assert not (root / "Day 01").exists()
 
-    # 25 inputs + 25 test inputs
-    inputs = sorted((root / "inputs").glob("day??.txt"))
-    test_inputs = sorted((root / "inputs").glob("day??_test.txt"))
-    assert len(inputs) == 25
-    assert len(test_inputs) == 25
-    assert all(p.read_text() == "" for p in inputs + test_inputs)
+    for n in range(1, 26):
+        day = root / f"Day {n}"
+        assert (day / "input.txt").read_text() == ""
+        assert (day / "input_test.txt").read_text() == ""
+        main = (day / "main.py").read_text()
+        # Each main.py references its own day folder in the path strings.
+        assert f'load_input("Day {n}/input_test.txt")' in main
+        assert f'load_input("Day {n}/input.txt")' in main
+        # Functions present.
+        assert "def load_input" in main
+        assert "def part1" in main
+        assert "def part2" in main
 
 
 def test_aoc_cli_override_year(tmp_path):
     template = parse_temx(EXAMPLE)
     plan = expand(template, overrides={"year": "2030"})
     build(plan, tmp_path)
-    assert (tmp_path / "advent-of-code-2030" / "README.md").is_file()
+    assert (tmp_path / "aoc-2030").is_dir()
+    assert (tmp_path / "aoc-2030" / "Day 1" / "main.py").is_file()
 
 
 def test_aoc_dry_run_does_not_write(tmp_path):
@@ -47,6 +50,16 @@ def test_aoc_dry_run_does_not_write(tmp_path):
     plan = expand(template)
     written = build(plan, tmp_path, dry_run=True)
     assert not any(tmp_path.iterdir())
-    # 1 outer dir + README + solve.py + days dir + __init__.py + 25 day*.py + inputs dir + .gitkeep + 25 + 25
-    # = 1 + 1 + 1 + 1 + 1 + 25 + 1 + 1 + 25 + 25 = 82
-    assert len(written) == 82
+    # 1 outer dir ("aoc-{year}") + 25 day dirs + 25 * 3 files = 1 + 25 + 75 = 101
+    assert len(written) == 101
+
+
+def test_aoc_single_day_via_override(tmp_path):
+    # --var day=7 collapses the 1..25 loop to just day 7.
+    template = parse_temx(EXAMPLE)
+    plan = expand(template, overrides={"year": "2022", "day": "7"})
+    build(plan, tmp_path)
+    root = tmp_path / "aoc-2022"
+    day_dirs = sorted(p.name for p in root.iterdir() if p.is_dir())
+    assert day_dirs == ["Day 7"]
+    assert 'load_input("Day 7/input.txt")' in (root / "Day 7" / "main.py").read_text()
