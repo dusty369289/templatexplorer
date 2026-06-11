@@ -1,0 +1,50 @@
+variables:
+  year:
+    value: 2026
+  day:
+    range: [1, 25]
+
+root:
+  - dir: "advent-of-code-{year}"
+    children:
+      - file: README.md
+        content: |
+          # Advent of Code {year}
+
+          Solutions per day live in `days/`; per-day inputs and test fixtures live in `inputs/`.
+
+      - file: solve.py
+        content: |
+          """Entry point: python solve.py <day>"""
+
+      - dir: days
+        children:
+          - file: __init__.py
+            content: ""
+          - file: "day{day:02d}.py"
+            repeat: day
+            content: |
+              """Day {day}."""
+
+              from pathlib import Path
+
+              DAY = {day}
+              INPUT_DIR = Path(__file__).parent.parent / "inputs"
+              INPUT_TXT = INPUT_DIR / f"day{{DAY:02d}}.txt"
+
+
+              def part1(data):
+                  ...
+
+
+              def part2(data):
+                  ...
+
+      - dir: inputs
+        children:
+          - file: .gitkeep
+            content: ""
+          - file: "day{day:02d}.txt"
+            repeat: day
+          - file: "day{day:02d}_test.txt"
+            repeat: day
