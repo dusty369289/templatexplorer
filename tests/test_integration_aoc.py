@@ -50,8 +50,9 @@ def test_aoc_dry_run_does_not_write(tmp_path):
     plan = expand(template)
     written = build(plan, tmp_path, dry_run=True)
     assert not any(tmp_path.iterdir())
-    # 1 outer dir ("aoc-{year}") + 25 day dirs + 25 * 3 files = 1 + 25 + 75 = 101
-    assert len(written) == 101
+    # 1 outer dir ("aoc-{year}") + 1 root .gitignore + 25 day dirs + 25 * 3 files
+    # = 1 + 1 + 25 + 75 = 102
+    assert len(written) == 102
 
 
 def test_aoc_single_day_via_override(tmp_path):
