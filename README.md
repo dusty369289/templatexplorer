@@ -78,7 +78,7 @@ message), `2` argparse misuse.
 
 ## Examples
 
-The `examples/` directory ships seven ready-to-use templates. Each starts
+The `examples/` directory ships nine ready-to-use templates. Each starts
 with a comment describing what it builds and how to invoke it.
 
 | Template | What it builds | Key features shown |
@@ -91,6 +91,7 @@ with a comment describing what it builds and how to invoke it.
 | `course-modules.temx` | N modules each with notes, slides, exercises, quiz | Nested `range:` loops |
 | `blog-posts.temx` | A year of post stubs in month folders | Format specs in folder names |
 | `aoc-scaffold.temx` | One folder per Advent of Code day, with input/test files and a stub solver | Loop + content substitution |
+| `everybodycodes.temx` | An Everybody Codes year: shared `ec.py` toolkit, a `runner.py`, a `new_quest.py` generator, and a seed quest with a per-part input layout | Multi-file scaffold whose generated `new_quest.py` scaffolds further quests |
 
 Run any of them:
 

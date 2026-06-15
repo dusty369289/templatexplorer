@@ -1,0 +1,351 @@
+# Everybody Codes: a year scaffold with a shared toolkit and a
+# `new_quest.py` generator that scaffolds each quest on demand.
+#
+# Run: python templatexplorer.py examples/everybodycodes.temx --var year=2024
+
+variables:
+  year:
+    value: 2024
+
+root:
+  - dir: "everybodycodes{year}"
+    children:
+      - file: .gitignore
+        content: |
+          # Everybody Codes inputs are personal to your account — don't commit them.
+          # Samples (pN_sample.txt) come from the public puzzle text and are safe to keep.
+          p1.txt
+          p2.txt
+          p3.txt
+      - file: README.md
+        content: |
+          # Everybody Codes {year}
+
+          Scaffold for an [Everybody Codes](https://everybody.codes) year. Each quest has
+          three escalating parts, and **every part has its own input** — so each quest
+          folder holds a separate input (and sample) file per part.
+
+          ## Layout
+
+          ```
+          everybodycodes{year}/
+          ├── ec.py            # shared toolkit: Quest class, solver registry, timed runner
+          ├── runner.py        # run/​time any quest from here
+          ├── new_quest.py     # scaffold the next quest folder on demand
+          ├── .gitignore       # keeps your personal inputs out of git (samples are kept)
+          └── Quest 01/
+              ├── solution.py      # three registered part solvers
+              ├── p1.txt           # your real input for part 1   (git-ignored)
+              ├── p1_sample.txt    # the worked example for part 1
+              ├── p2.txt  p2_sample.txt
+              ├── p3.txt  p3_sample.txt
+              └── notes.md
+          ```
+
+          ## Workflow
+
+          1. **Add a quest** as the event releases them:
+
+             ```
+             python new_quest.py          # creates the next Quest NN/
+             ```
+
+          2. **Paste inputs.** Drop each part's real input into `pN.txt` and the puzzle's
+             worked example into `pN_sample.txt`.
+
+          3. **Solve.** Fill in `part1` / `part2` / `part3` in the quest's `solution.py`:
+
+             ```python
+             @quest.solver(1)
+             def part1(data: str):
+                 return data.count("X")
+             ```
+
+          4. **Run** — from the quest folder or the year root:
+
+             ```
+             python "Quest 03/solution.py"        # all parts, real input
+             python "Quest 03/solution.py" 2 -s   # part 2 on the sample
+             python runner.py 3 -s                # same, via the root runner
+             python runner.py --all               # every solved quest, timed
+             ```
+
+          Each run prints the answer and how long the solver took.
+      - file: ec.py
+        content: |
+          """Shared toolkit for an Everybody Codes year.
+
+          Everybody Codes quests come in three escalating parts, and — unlike Advent of
+          Code — *each part has its own input*. This module gives every quest a tiny,
+          uniform harness so a `solution.py` is just three functions:
+
+              from ec import Quest
+              quest = Quest(__file__)
+
+              @quest.solver(1)
+              def part1(data: str):
+                  ...
+
+              if __name__ == "__main__":
+                  quest.run()
+
+          Inputs live beside the solution: `pN.txt` is your personal puzzle input for
+          part N, `pN_sample.txt` is the worked example from the puzzle text. Run a
+          quest with `-s/--sample` to use the sample files.
+          """
+          from __future__ import annotations
+
+          import argparse
+          import time
+          from pathlib import Path
+          from typing import Callable
+
+          # A solver takes the raw puzzle text for its part and returns the answer.
+          Solver = Callable[[str], object]
+
+
+          class Quest:
+              """A single Everybody Codes quest: its folder, inputs, and part solvers."""
+
+              def __init__(self, solution_file: str | Path) -> None:
+                  self.dir = Path(solution_file).resolve().parent
+                  self.name = self.dir.name
+                  self.solvers: dict[int, Solver] = {{}}
+
+              def solver(self, part: int) -> Callable[[Solver], Solver]:
+                  """Decorator registering a function as the solver for `part` (1-3)."""
+
+                  def register(func: Solver) -> Solver:
+                      self.solvers[part] = func
+                      return func
+
+                  return register
+
+              def input(self, part: int, *, sample: bool = False) -> str:
+                  """Load part `part`'s input (real, or the sample with `sample=True`)."""
+                  path = self.dir / f"p{{part}}{{'_sample' if sample else ''}}.txt"
+                  if not path.exists():
+                      kind = "sample" if sample else "input"
+                      raise FileNotFoundError(
+                          f"{{self.name}}: {{path.name}} is missing — paste the part {{part}} "
+                          f"{{kind}} there first."
+                      )
+                  return path.read_text().strip("\n")
+
+              def run(self, argv: list[str] | None = None) -> None:
+                  """CLI entry point: run some/all registered parts, timed."""
+                  registered = sorted(self.solvers)
+                  ap = argparse.ArgumentParser(description=f"Solve {{self.name}}.")
+                  ap.add_argument(
+                      "parts", nargs="*", type=int,
+                      help=f"parts to run (default: all registered — {{registered or 'none'}})",
+                  )
+                  ap.add_argument(
+                      "-s", "--sample", action="store_true",
+                      help="use pN_sample.txt instead of the real pN.txt",
+                  )
+                  args = ap.parse_args(argv)
+
+                  for part in args.parts or registered:
+                      self._run_part(part, sample=args.sample)
+
+              def _run_part(self, part: int, *, sample: bool) -> None:
+                  solver = self.solvers.get(part)
+                  if solver is None:
+                      print(f"  part {{part}}: no solver registered")
+                      return
+                  data = self.input(part, sample=sample)
+                  start = time.perf_counter()
+                  answer = solver(data)
+                  elapsed_ms = (time.perf_counter() - start) * 1000
+                  source = "sample" if sample else "input"
+                  print(f"  part {{part}} [{{source}}]: {{answer}}   ({{elapsed_ms:.2f}} ms)")
+      - file: runner.py
+        content: |
+          #!/usr/bin/env python3
+          """Run quests from the year root.
+
+              python runner.py 3          # all registered parts of Quest 03, real input
+              python runner.py 3 -s       # ...on the sample input
+              python runner.py 3 2        # only part 2 of Quest 03
+              python runner.py --all      # every quest that has a solution.py
+              python runner.py --all -s   # ...on samples
+
+          Everything after the quest number is forwarded to the quest's own CLI, so
+          `python runner.py 3 2 -s` runs part 2 of Quest 03 on its sample.
+          """
+          from __future__ import annotations
+
+          import re
+          import runpy
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parent
+          QUEST_RE = re.compile(r"Quest (\d+)$")
+
+
+          def solution_path(n: int) -> Path:
+              return ROOT / f"Quest {{n:02d}}" / "solution.py"
+
+
+          def all_quests() -> list[int]:
+              return sorted(
+                  int(m.group(1))
+                  for p in ROOT.iterdir()
+                  if p.is_dir() and (m := QUEST_RE.match(p.name)) and (p / "solution.py").exists()
+              )
+
+
+          def run_quest(n: int, forwarded: list[str]) -> None:
+              sol = solution_path(n)
+              if not sol.exists():
+                  print(f"Quest {{n:02d}}: no solution.py yet — run `python new_quest.py {{n}}` first")
+                  return
+              print(f"== Quest {{n:02d}} ==")
+              sys.argv = [str(sol), *forwarded]
+              runpy.run_path(str(sol), run_name="__main__")
+
+
+          def main(argv: list[str]) -> int:
+              if not argv:
+                  print(__doc__)
+                  return 2
+              if argv[0] == "--all":
+                  quests = all_quests()
+                  if not quests:
+                      print("No quests with a solution.py yet — run `python new_quest.py`.")
+                      return 1
+                  for n in quests:
+                      run_quest(n, argv[1:])
+                  return 0
+              return run_quest(int(argv[0]), argv[1:]) or 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main(sys.argv[1:]))
+      - file: new_quest.py
+        content: |
+          #!/usr/bin/env python3
+          """Scaffold the next Everybody Codes quest folder.
+
+              python new_quest.py        # create the next quest after the highest existing
+              python new_quest.py 7      # create Quest 07 specifically
+
+          Each new quest gets an empty input + sample file per part, a notes.md
+          checklist, and a solution.py wired to the shared `ec` toolkit. Existing
+          quests are never overwritten.
+          """
+          from __future__ import annotations
+
+          import re
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parent
+          QUEST_RE = re.compile(r"Quest (\d+)$")
+
+          # Kept in sync with the seed Quest 01/solution.py shipped by the template.
+          SOLUTION = '''import sys
+          from pathlib import Path
+
+          sys.path.append(str(Path(__file__).resolve().parents[1]))
+          from ec import Quest
+
+          quest = Quest(__file__)
+
+
+          @quest.solver(1)
+          def part1(data: str):
+              return None
+
+
+          @quest.solver(2)
+          def part2(data: str):
+              return None
+
+
+          @quest.solver(3)
+          def part3(data: str):
+              return None
+
+
+          if __name__ == "__main__":
+              quest.run()
+          '''
+
+
+          def next_number() -> int:
+              used = [
+                  int(m.group(1))
+                  for p in ROOT.iterdir()
+                  if p.is_dir() and (m := QUEST_RE.match(p.name))
+              ]
+              return max(used, default=0) + 1
+
+
+          def main(argv: list[str]) -> int:
+              n = int(argv[0]) if argv else next_number()
+              folder = ROOT / f"Quest {{n:02d}}"
+              if folder.exists():
+                  print(f"{{folder.name}} already exists — refusing to overwrite", file=sys.stderr)
+                  return 1
+
+              folder.mkdir(parents=True)
+              (folder / "solution.py").write_text(SOLUTION)
+              for part in (1, 2, 3):
+                  (folder / f"p{{part}}.txt").touch()
+                  (folder / f"p{{part}}_sample.txt").touch()
+              (folder / "notes.md").write_text(
+                  f"# {{folder.name}}\n\n- [ ] Part 1\n- [ ] Part 2\n- [ ] Part 3\n"
+              )
+
+              print(f"Created {{folder.name}}/  (solution.py + parts 1-3 scaffolded)")
+              return 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main(sys.argv[1:]))
+      - dir: "Quest 01"
+        children:
+          - file: solution.py
+            content: |
+              import sys
+              from pathlib import Path
+
+              sys.path.append(str(Path(__file__).resolve().parents[1]))
+              from ec import Quest
+
+              quest = Quest(__file__)
+
+
+              @quest.solver(1)
+              def part1(data: str):
+                  return None
+
+
+              @quest.solver(2)
+              def part2(data: str):
+                  return None
+
+
+              @quest.solver(3)
+              def part3(data: str):
+                  return None
+
+
+              if __name__ == "__main__":
+                  quest.run()
+          - file: p1.txt
+          - file: p1_sample.txt
+          - file: p2.txt
+          - file: p2_sample.txt
+          - file: p3.txt
+          - file: p3_sample.txt
+          - file: notes.md
+            content: |
+              # Quest 01
+
+              - [ ] Part 1
+              - [ ] Part 2
+              - [ ] Part 3
