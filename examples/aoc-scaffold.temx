@@ -21,24 +21,46 @@ root:
           - file: input_test.txt
           - file: main.py
             content: |
-              def load_input(file_path) -> list:
+              from __future__ import annotations
+              import math
+
+
+              def load_input(file_path):
                   with open(file_path, "r") as file:
-                      data = file.read().strip().split("\n")
+                      data = file.read().strip().splitlines()
                   return data
 
 
+              DEBUG = True
+              TASK = 1
+              CPRINT = True
+
+
+              def cprint(msg, indent: int = 0):
+                  if CPRINT:
+                      print(("  " * indent) + msg)
+
+
               def part1(data):
-                  ...
+                  pass
 
 
               def part2(data):
-                  ...
+                  pass
 
 
               if __name__ == "__main__":
-                  testdata = load_input("Day {day}/input_test.txt")
-                  # assert part1(testdata) == ...
-                  # assert part2(testdata) == ...
-                  data = load_input("Day {day}/input.txt")
-                  print("Part 1:", part1(data))
-                  print("Part 2:", part2(data))
+                  if DEBUG:
+                      testdata = load_input("Day {day}/input_test.txt")
+                      if TASK == 1:
+                          p = part1(testdata)
+                          # assert p == 0  # TODO: expected from puzzle example
+                      elif TASK == 2:
+                          p = part2(testdata)
+                          # assert p == 0  # TODO: expected from puzzle example
+                  else:
+                      data = load_input("Day {day}/input.txt")
+                      if TASK == 1:
+                          print("Part 1:", part1(data))
+                      elif TASK == 2:
+                          print("Part 2:", part2(data))
