@@ -34,6 +34,25 @@ def test_everybodycodes_builds_year_scaffold(tmp_path):
     assert "@quest.solver(1)" in gen
 
 
+def test_everybodycodes_ships_vscode_tasks(tmp_path):
+    import json
+
+    plan = expand(parse_temx(EXAMPLE), overrides={"year": "2024"})
+    build(plan, tmp_path)
+
+    tasks_file = tmp_path / "everybodycodes2024" / ".vscode" / "tasks.json"
+    assert tasks_file.is_file()
+    tasks = json.loads(tasks_file.read_text())  # also asserts the JSON survived escaping
+
+    by_label = {t["label"]: t for t in tasks["tasks"]}
+    samples = by_label["Run all samples (current file)"]
+    real = by_label["Run all real (current file)"]
+    # Each acts on the open file; samples passes -s, real does not. ${file}
+    # must have round-tripped through the {{}} escape, not been interpolated.
+    assert samples["args"] == ["${file}", "-s"]
+    assert real["args"] == ["${file}"]
+
+
 def test_everybodycodes_braces_round_trip(tmp_path):
     # The Python files are full of literal braces (f-strings, `{}` literals).
     # Confirm templatexplorer rendered them verbatim, not as interpolations.

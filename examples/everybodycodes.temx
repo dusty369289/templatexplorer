@@ -71,6 +71,25 @@ root:
              ```
 
           Each run prints the answer and how long the solver took.
+
+          ## Editor (VS Code)
+
+          `.vscode/tasks.json` ships two tasks that act on whichever `solution.py` is
+          open:
+
+          - **Run all samples (current file)** — the default build task, so it's on
+            `Ctrl+Shift+B` out of the box. Use this constantly while iterating.
+          - **Run all real (current file)** — the default test task
+            (`Tasks: Run Test Task`).
+
+          Both are also in the `Tasks: Run Task` list. VS Code only reads keybindings
+          from your user profile (not the workspace), so to put each on its own key add
+          this to your user `keybindings.json`:
+
+          ```json
+          {{ "key": "ctrl+alt+s", "command": "workbench.action.tasks.runTask", "args": "Run all samples (current file)" }},
+          {{ "key": "ctrl+alt+r", "command": "workbench.action.tasks.runTask", "args": "Run all real (current file)" }}
+          ```
       - file: ec.py
         content: |
           """Shared toolkit for an Everybody Codes year.
@@ -306,6 +325,35 @@ root:
 
           if __name__ == "__main__":
               raise SystemExit(main(sys.argv[1:]))
+      - dir: ".vscode"
+        children:
+          - file: tasks.json
+            content: |
+              {{
+                "version": "2.0.0",
+                "tasks": [
+                  {{
+                    "label": "Run all samples (current file)",
+                    "detail": "Run every registered part of the open solution.py on its pN_sample.txt inputs.",
+                    "type": "process",
+                    "command": "python",
+                    "args": ["${{file}}", "-s"],
+                    "group": {{ "kind": "build", "isDefault": true }},
+                    "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},
+                    "problemMatcher": []
+                  }},
+                  {{
+                    "label": "Run all real (current file)",
+                    "detail": "Run every registered part of the open solution.py on its real pN.txt inputs.",
+                    "type": "process",
+                    "command": "python",
+                    "args": ["${{file}}"],
+                    "group": {{ "kind": "test", "isDefault": true }},
+                    "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},
+                    "problemMatcher": []
+                  }}
+                ]
+              }}
       - dir: "Quest 01"
         children:
           - file: solution.py
