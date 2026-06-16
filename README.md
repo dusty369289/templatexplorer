@@ -78,7 +78,7 @@ message), `2` argparse misuse.
 
 ## Examples
 
-The `examples/` directory ships nine ready-to-use templates. Each starts
+The `examples/` directory ships ten ready-to-use templates. Each starts
 with a comment describing what it builds and how to invoke it.
 
 | Template | What it builds | Key features shown |
@@ -92,6 +92,7 @@ with a comment describing what it builds and how to invoke it.
 | `blog-posts.temx` | A year of post stubs in month folders | Format specs in folder names |
 | `aoc-scaffold.temx` | One folder per Advent of Code day, with input/test files and a stub solver | Loop + content substitution |
 | `everybodycodes.temx` | An Everybody Codes year: shared `ec.py` toolkit, a `runner.py`, a `new_quest.py` generator, and a seed quest with a per-part input layout | Multi-file scaffold whose generated `new_quest.py` scaffolds further quests |
+| `codyssi.temx` | A Codyssi year: shared `codyssi.py` toolkit, a `runner.py`, a `new_day.py` generator, `.vscode` tasks, and a seed day with a single shared input across 3 parts | Multi-file scaffold; AoC-style shared input with a 3-part solver registry |
 
 Run any of them:
 

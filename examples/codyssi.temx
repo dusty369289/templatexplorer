@@ -1,0 +1,411 @@
+# Codyssi: a year scaffold with a shared toolkit and a `new_day.py`
+# generator that scaffolds each daily problem on demand.
+#
+# Run: python templatexplorer.py examples/codyssi.temx --var year=2025
+
+variables:
+  year:
+    value: 2025
+
+root:
+  - dir: "codyssi{year}"
+    children:
+      - file: .gitignore
+        content: |
+          # Codyssi puzzle inputs are personal to your account — don't commit them.
+          # Samples (sample.txt) come from the public problem text and are safe to keep.
+          input.txt
+      - file: README.md
+        content: |
+          # Codyssi {year}
+
+          Scaffold for a [Codyssi](https://www.codyssi.com) year. Each problem has three
+          escalating parts (difficulty 1-6 each), and — like Advent of Code — **all three
+          parts read the same input**. So each day folder holds one `input.txt` shared
+          across its parts, plus a `sample.txt` worked example.
+
+          ## Layout
+
+          ```
+          codyssi{year}/
+          ├── codyssi.py       # shared toolkit: Problem class, solver registry, timed runner
+          ├── runner.py        # run/​time any day from here
+          ├── new_day.py       # scaffold the next day folder on demand
+          ├── .gitignore       # keeps your personal inputs out of git (samples are kept)
+          ├── .vscode/
+          │   └── tasks.json   # run-all-on-current-file tasks (samples / real)
+          └── Day 01/
+              ├── solution.py      # three registered part solvers
+              ├── input.txt        # your real input, shared by all 3 parts   (git-ignored)
+              ├── sample.txt       # the worked example from the problem text
+              └── notes.md         # per-part difficulty table
+          ```
+
+          ## Workflow
+
+          1. **Add a day** as the contest releases them:
+
+             ```
+             python new_day.py            # creates the next Day NN/
+             ```
+
+          2. **Paste the input.** Drop the real puzzle input into `input.txt` and the
+             problem's worked example into `sample.txt`.
+
+          3. **Solve.** Fill in `part1` / `part2` / `part3` in the day's `solution.py`:
+
+             ```python
+             @problem.solver(1)
+             def part1(data: str):
+                 return sum(int(x) for x in data.split())
+             ```
+
+          4. **Run** — from the day folder or the year root:
+
+             ```
+             python "Day 03/solution.py"        # all parts, real input
+             python "Day 03/solution.py" 2 -s   # part 2 on the sample
+             python runner.py 3 -s              # same, via the root runner
+             python runner.py --all             # every solved day, timed
+             ```
+
+          Each run prints the answer and how long the solver took.
+
+          ## Editor (VS Code)
+
+          `.vscode/tasks.json` ships two tasks that act on whichever `solution.py` is
+          open:
+
+          - **Run all samples (current file)** — the default build task, so it's on
+            `Ctrl+Shift+B` out of the box. Use this constantly while iterating.
+          - **Run all real (current file)** — the default test task
+            (`Tasks: Run Test Task`).
+
+          Both run with `${{command:python.interpreterPath}}` — i.e. the interpreter you
+          select in VS Code's status bar — so they use your active venv, not whatever
+          `python` happens to be on PATH. Pick your venv as the workspace interpreter and
+          the tasks follow it.
+
+          Both are also in the `Tasks: Run Task` list. VS Code only reads keybindings
+          from your user profile (not the workspace), so to put each on its own key add
+          this to your user `keybindings.json`:
+
+          ```json
+          {{ "key": "ctrl+alt+s", "command": "workbench.action.tasks.runTask", "args": "Run all samples (current file)" }},
+          {{ "key": "ctrl+alt+r", "command": "workbench.action.tasks.runTask", "args": "Run all real (current file)" }}
+          ```
+      - file: codyssi.py
+        content: |
+          """Shared toolkit for a Codyssi year.
+
+          Codyssi problems come in three escalating parts (difficulty 1-6 each), and —
+          like Advent of Code — all three parts read the *same* puzzle input. This
+          module gives every problem a uniform harness so a `solution.py` is just three
+          functions:
+
+              from codyssi import Problem
+              problem = Problem(__file__)
+
+              @problem.solver(1)
+              def part1(data: str):
+                  ...
+
+              if __name__ == "__main__":
+                  problem.run()
+
+          Inputs live beside the solution: `input.txt` is your personal puzzle input
+          (shared by all three parts), `sample.txt` is the worked example from the
+          problem text. Run with `-s/--sample` to use sample.txt.
+          """
+          from __future__ import annotations
+
+          import argparse
+          import time
+          from pathlib import Path
+          from typing import Callable
+
+          # A solver takes the puzzle text and returns the answer for its part.
+          Solver = Callable[[str], object]
+
+
+          class Problem:
+              """A single Codyssi problem: its folder, shared input, and part solvers."""
+
+              def __init__(self, solution_file: str | Path) -> None:
+                  self.dir = Path(solution_file).resolve().parent
+                  self.name = self.dir.name
+                  self.solvers: dict[int, Solver] = {{}}
+
+              def solver(self, part: int) -> Callable[[Solver], Solver]:
+                  """Decorator registering a function as the solver for `part` (1-3)."""
+
+                  def register(func: Solver) -> Solver:
+                      self.solvers[part] = func
+                      return func
+
+                  return register
+
+              def input(self, *, sample: bool = False) -> str:
+                  """Load the problem's shared input (or the sample with `sample=True`)."""
+                  path = self.dir / ("sample.txt" if sample else "input.txt")
+                  if not path.exists():
+                      kind = "sample" if sample else "puzzle input"
+                      raise FileNotFoundError(
+                          f"{{self.name}}: {{path.name}} is missing — paste the {{kind}} there first."
+                      )
+                  return path.read_text().strip("\n")
+
+              def run(self, argv: list[str] | None = None) -> None:
+                  """CLI entry point: run some/all registered parts on the shared input."""
+                  registered = sorted(self.solvers)
+                  ap = argparse.ArgumentParser(description=f"Solve {{self.name}}.")
+                  ap.add_argument(
+                      "parts", nargs="*", type=int,
+                      help=f"parts to run (default: all registered — {{registered or 'none'}})",
+                  )
+                  ap.add_argument(
+                      "-s", "--sample", action="store_true",
+                      help="use sample.txt instead of the real input.txt",
+                  )
+                  args = ap.parse_args(argv)
+
+                  data = self.input(sample=args.sample)
+                  for part in args.parts or registered:
+                      self._run_part(part, data, sample=args.sample)
+
+              def _run_part(self, part: int, data: str, *, sample: bool) -> None:
+                  solver = self.solvers.get(part)
+                  if solver is None:
+                      print(f"  part {{part}}: no solver registered")
+                      return
+                  start = time.perf_counter()
+                  answer = solver(data)
+                  elapsed_ms = (time.perf_counter() - start) * 1000
+                  source = "sample" if sample else "input"
+                  print(f"  part {{part}} [{{source}}]: {{answer}}   ({{elapsed_ms:.2f}} ms)")
+      - file: runner.py
+        content: |
+          #!/usr/bin/env python3
+          """Run problems from the year root.
+
+              python runner.py 3          # all registered parts of Day 03, real input
+              python runner.py 3 -s       # ...on the sample input
+              python runner.py 3 2        # only part 2 of Day 03
+              python runner.py --all      # every day that has a solution.py
+              python runner.py --all -s   # ...on samples
+
+          Everything after the day number is forwarded to the problem's own CLI, so
+          `python runner.py 3 2 -s` runs part 2 of Day 03 on its sample.
+          """
+          from __future__ import annotations
+
+          import re
+          import runpy
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parent
+          DAY_RE = re.compile(r"Day (\d+)$")
+
+
+          def solution_path(n: int) -> Path:
+              return ROOT / f"Day {{n:02d}}" / "solution.py"
+
+
+          def all_days() -> list[int]:
+              return sorted(
+                  int(m.group(1))
+                  for p in ROOT.iterdir()
+                  if p.is_dir() and (m := DAY_RE.match(p.name)) and (p / "solution.py").exists()
+              )
+
+
+          def run_day(n: int, forwarded: list[str]) -> None:
+              sol = solution_path(n)
+              if not sol.exists():
+                  print(f"Day {{n:02d}}: no solution.py yet — run `python new_day.py {{n}}` first")
+                  return
+              print(f"== Day {{n:02d}} ==")
+              sys.argv = [str(sol), *forwarded]
+              runpy.run_path(str(sol), run_name="__main__")
+
+
+          def main(argv: list[str]) -> int:
+              if not argv:
+                  print(__doc__)
+                  return 2
+              if argv[0] == "--all":
+                  days = all_days()
+                  if not days:
+                      print("No days with a solution.py yet — run `python new_day.py`.")
+                      return 1
+                  for n in days:
+                      run_day(n, argv[1:])
+                  return 0
+              return run_day(int(argv[0]), argv[1:]) or 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main(sys.argv[1:]))
+      - file: new_day.py
+        content: |
+          #!/usr/bin/env python3
+          """Scaffold the next Codyssi problem folder.
+
+              python new_day.py        # create the next day after the highest existing
+              python new_day.py 7      # create Day 07 specifically
+
+          Each new day gets a shared input.txt + sample.txt, a notes.md with the
+          per-part difficulty table, and a solution.py wired to the shared `codyssi`
+          toolkit. Existing days are never overwritten.
+          """
+          from __future__ import annotations
+
+          import re
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parent
+          DAY_RE = re.compile(r"Day (\d+)$")
+
+          # Kept in sync with the seed Day 01/solution.py shipped by the template.
+          SOLUTION = '''import sys
+          from pathlib import Path
+
+          sys.path.append(str(Path(__file__).resolve().parents[1]))
+          from codyssi import Problem
+
+          problem = Problem(__file__)
+
+
+          @problem.solver(1)
+          def part1(data: str):
+              return None
+
+
+          @problem.solver(2)
+          def part2(data: str):
+              return None
+
+
+          @problem.solver(3)
+          def part3(data: str):
+              return None
+
+
+          if __name__ == "__main__":
+              problem.run()
+          '''
+
+          NOTES = '''# {{name}}
+
+          Codyssi problem — three parts, one shared input, difficulty 1-6 per part.
+
+          | Part | Difficulty | Done |
+          |------|------------|------|
+          | 1    |            | [ ]  |
+          | 2    |            | [ ]  |
+          | 3    |            | [ ]  |
+          '''
+
+
+          def next_number() -> int:
+              used = [
+                  int(m.group(1))
+                  for p in ROOT.iterdir()
+                  if p.is_dir() and (m := DAY_RE.match(p.name))
+              ]
+              return max(used, default=0) + 1
+
+
+          def main(argv: list[str]) -> int:
+              n = int(argv[0]) if argv else next_number()
+              folder = ROOT / f"Day {{n:02d}}"
+              if folder.exists():
+                  print(f"{{folder.name}} already exists — refusing to overwrite", file=sys.stderr)
+                  return 1
+
+              folder.mkdir(parents=True)
+              (folder / "solution.py").write_text(SOLUTION)
+              (folder / "input.txt").touch()
+              (folder / "sample.txt").touch()
+              (folder / "notes.md").write_text(NOTES.format(name=folder.name))
+
+              print(f"Created {{folder.name}}/  (solution.py + shared input/sample scaffolded)")
+              return 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main(sys.argv[1:]))
+      - dir: ".vscode"
+        children:
+          - file: tasks.json
+            content: |
+              {{
+                "version": "2.0.0",
+                "tasks": [
+                  {{
+                    "label": "Run all samples (current file)",
+                    "detail": "Run every registered part of the open solution.py on its sample.txt input.",
+                    "type": "shell",
+                    "command": "${{command:python.interpreterPath}}",
+                    "args": ["${{file}}", "-s"],
+                    "group": {{ "kind": "build", "isDefault": true }},
+                    "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},
+                    "problemMatcher": []
+                  }},
+                  {{
+                    "label": "Run all real (current file)",
+                    "detail": "Run every registered part of the open solution.py on its real input.txt.",
+                    "type": "shell",
+                    "command": "${{command:python.interpreterPath}}",
+                    "args": ["${{file}}"],
+                    "group": {{ "kind": "test", "isDefault": true }},
+                    "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},
+                    "problemMatcher": []
+                  }}
+                ]
+              }}
+      - dir: "Day 01"
+        children:
+          - file: solution.py
+            content: |
+              import sys
+              from pathlib import Path
+
+              sys.path.append(str(Path(__file__).resolve().parents[1]))
+              from codyssi import Problem
+
+              problem = Problem(__file__)
+
+
+              @problem.solver(1)
+              def part1(data: str):
+                  return None
+
+
+              @problem.solver(2)
+              def part2(data: str):
+                  return None
+
+
+              @problem.solver(3)
+              def part3(data: str):
+                  return None
+
+
+              if __name__ == "__main__":
+                  problem.run()
+          - file: input.txt
+          - file: sample.txt
+          - file: notes.md
+            content: |
+              # Day 01
+
+              Codyssi problem — three parts, one shared input, difficulty 1-6 per part.
+
+              | Part | Difficulty | Done |
+              |------|------------|------|
+              | 1    |            | [ ]  |
+              | 2    |            | [ ]  |
+              | 3    |            | [ ]  |
