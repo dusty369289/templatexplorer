@@ -54,6 +54,10 @@ def test_everybodycodes_ships_vscode_tasks(tmp_path):
     # Tasks must follow VS Code's selected interpreter (the venv), not PATH python.
     assert samples["command"] == "${command:python.interpreterPath}"
     assert real["command"] == "${command:python.interpreterPath}"
+    # Must be shell, not process: a process task resolves the absolute
+    # interpreter path relative to the cwd and mangles it on Windows.
+    assert samples["type"] == "shell"
+    assert real["type"] == "shell"
 
 
 def test_everybodycodes_braces_round_trip(tmp_path):

@@ -340,7 +340,7 @@ root:
                   {{
                     "label": "Run all samples (current file)",
                     "detail": "Run every registered part of the open solution.py on its pN_sample.txt inputs.",
-                    "type": "process",
+                    "type": "shell",
                     "command": "${{command:python.interpreterPath}}",
                     "args": ["${{file}}", "-s"],
                     "group": {{ "kind": "build", "isDefault": true }},
@@ -350,7 +350,7 @@ root:
                   {{
                     "label": "Run all real (current file)",
                     "detail": "Run every registered part of the open solution.py on its real pN.txt inputs.",
-                    "type": "process",
+                    "type": "shell",
                     "command": "${{command:python.interpreterPath}}",
                     "args": ["${{file}}"],
                     "group": {{ "kind": "test", "isDefault": true }},
