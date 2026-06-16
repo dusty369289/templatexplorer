@@ -30,6 +30,11 @@ def test_codyssi_builds_year_scaffold(tmp_path):
     assert "def next_number" in gen
     assert "@problem.solver(1)" in gen
 
+    # gitignore standard: inputs, samples, venv, and caches stay out of git.
+    gitignore = (root / ".gitignore").read_text()
+    for pattern in ("input.txt", "sample.txt", ".venv/*", "__pycache__/*"):
+        assert pattern in gitignore, f".gitignore missing {pattern}"
+
 
 def test_codyssi_ships_vscode_tasks(tmp_path):
     import json

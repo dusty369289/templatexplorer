@@ -15,6 +15,9 @@ root:
           # Codyssi puzzle inputs are personal to your account — don't commit them.
           # Samples (sample.txt) come from the public problem text and are safe to keep.
           input.txt
+          sample.txt
+          .venv/*
+          __pycache__/*
       - file: README.md
         content: |
           # Codyssi {year}
