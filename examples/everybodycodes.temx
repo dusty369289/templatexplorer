@@ -82,6 +82,11 @@ root:
           - **Run all real (current file)** — the default test task
             (`Tasks: Run Test Task`).
 
+          Both run with `${{command:python.interpreterPath}}` — i.e. the interpreter you
+          select in VS Code's status bar — so they use your active venv, not whatever
+          `python` happens to be on PATH. Pick your venv as the workspace interpreter and
+          the tasks follow it.
+
           Both are also in the `Tasks: Run Task` list. VS Code only reads keybindings
           from your user profile (not the workspace), so to put each on its own key add
           this to your user `keybindings.json`:
@@ -336,7 +341,7 @@ root:
                     "label": "Run all samples (current file)",
                     "detail": "Run every registered part of the open solution.py on its pN_sample.txt inputs.",
                     "type": "process",
-                    "command": "python",
+                    "command": "${{command:python.interpreterPath}}",
                     "args": ["${{file}}", "-s"],
                     "group": {{ "kind": "build", "isDefault": true }},
                     "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},
@@ -346,7 +351,7 @@ root:
                     "label": "Run all real (current file)",
                     "detail": "Run every registered part of the open solution.py on its real pN.txt inputs.",
                     "type": "process",
-                    "command": "python",
+                    "command": "${{command:python.interpreterPath}}",
                     "args": ["${{file}}"],
                     "group": {{ "kind": "test", "isDefault": true }},
                     "presentation": {{ "reveal": "always", "panel": "dedicated", "clear": true }},

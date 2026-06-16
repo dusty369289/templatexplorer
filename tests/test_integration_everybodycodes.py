@@ -51,6 +51,9 @@ def test_everybodycodes_ships_vscode_tasks(tmp_path):
     # must have round-tripped through the {{}} escape, not been interpolated.
     assert samples["args"] == ["${file}", "-s"]
     assert real["args"] == ["${file}"]
+    # Tasks must follow VS Code's selected interpreter (the venv), not PATH python.
+    assert samples["command"] == "${command:python.interpreterPath}"
+    assert real["command"] == "${command:python.interpreterPath}"
 
 
 def test_everybodycodes_braces_round_trip(tmp_path):
